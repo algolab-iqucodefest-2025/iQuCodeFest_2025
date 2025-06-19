@@ -1,4 +1,5 @@
 from player_slot_class import PlayerSlot
+from card_generator import generate_card
 
 class Player:
     def __init__(self, name):

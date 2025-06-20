@@ -9,7 +9,6 @@ class QDutch:
         self.dutch_turn = None
         self.nb_players = nb_players
 
-
     def init_game(self):
         pass
 

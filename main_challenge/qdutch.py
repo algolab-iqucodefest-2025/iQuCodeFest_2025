@@ -1,246 +1,170 @@
 import pygame
-import math
 import sys
 
+# --- Initialization ---
 pygame.init()
 
-# Screen setup
+# --- Constants ---
 WIDTH, HEIGHT = 800, 600
-screen = pygame.display.set_mode((WIDTH, HEIGHT))
-pygame.display.set_caption("QDutch")
+CARD_WIDTH, CARD_HEIGHT = 60, 90
+CARD_SPACING = 20
+BG_COLOR = (34, 139, 34)      # Green table
+BG_CARD_COLOR = (34, 100, 34)  # Light green for cards
+CARD_COLOR = (255, 255, 255)
+TEXT_COLOR = (0, 0, 0)
 
-FONT = pygame.font.SysFont(None, 40)
+# --- Pygame Setup ---
+screen = pygame.display.set_mode((WIDTH, HEIGHT))
+pygame.display.set_caption("Top View Table Game")
+font = pygame.font.SysFont(None, 24)
 clock = pygame.time.Clock()
 
-# Colors
-WHITE = (255, 255, 255)
-BLACK = (0, 0, 0)
-GRAY = (200, 200, 200)
-BLUE = (100, 149, 237)
-GREEN = (0, 128, 0)
+# --- Data Classes ---
+class Slot:
+    def __init__(self, state):
+        self.state = state
 
-# Game states
-MENU = "menu"
-SELECT_PLAYERS = "select_players"
-ENTER_NAMES = "enter_names"
-GAME_STARTED = "game_started"
+class Player:
+    def __init__(self, name, states):
+        self.name = name
+        self.hand = [Slot(s) for s in states]
 
-# Player seat order based on number of players
-PLAYER_POSITIONS = {
-    2: [0, 2],         # Bottom, Top
-    3: [0, 1, 2],      # Bottom, Left, Top
-    4: [0, 1, 2, 3]    # Bottom, Left, Top, Right
-}
-
-state = MENU
-num_players = 0
-player_names = []
-name_inputs = []
-active_input = -1
-
-# Button class
-class Button:
-    def __init__(self, text, x, y, w, h, callback):
-        self.text = text
-        self.rect = pygame.Rect(x, y, w, h)
-        self.callback = callback
-
-    def draw(self, screen):
-        pygame.draw.rect(screen, BLUE, self.rect)
-        txt = FONT.render(self.text, True, WHITE)
-        screen.blit(txt, (self.rect.x + 10, self.rect.y + 10))
-
-    def handle_event(self, event):
-        if event.type == pygame.MOUSEBUTTONDOWN and self.rect.collidepoint(event.pos):
-            self.callback()
-
-# Input box class
-class InputBox:
-    def __init__(self, x, y, w, h, text=''):
-        self.rect = pygame.Rect(x, y, w, h)
-        self.color = GRAY
-        self.text = text
-        self.txt_surface = FONT.render(text, True, BLACK)
-        self.active = False
-
-    def handle_event(self, event):
-        if event.type == pygame.MOUSEBUTTONDOWN:
-            self.active = self.rect.collidepoint(event.pos)
-            self.color = BLUE if self.active else GRAY
-        if event.type == pygame.KEYDOWN and self.active:
-            if event.key == pygame.K_BACKSPACE:
-                self.text = self.text[:-1]
-            elif event.key == pygame.K_RETURN:
-                self.active = False
-                self.color = GRAY
-            else:
-                self.text += event.unicode
-            self.txt_surface = FONT.render(self.text, True, BLACK)
-
-    def draw(self, screen):
-        pygame.draw.rect(screen, self.color, self.rect, 2)
-        screen.blit(self.txt_surface, (self.rect.x + 5, self.rect.y + 5))
-
-# Callbacks
-def start_game():
-    global state
-    state = SELECT_PLAYERS
-
-def choose_players(n):
-    global num_players, state, name_inputs
-    num_players = n
-    state = ENTER_NAMES
-    name_inputs = [InputBox(300, 150 + i*70, 200, 40) for i in range(num_players)]
-
-def quit_game():
-    pygame.quit()
-    sys.exit()
-
-def back_to_menu():
-    global state
-    state = MENU
-
-def back_to_select_players():
-    global state
-    state = SELECT_PLAYERS
-
-def launch_game():
-    global state, player_names
-    player_names = [box.text.strip() for box in name_inputs]
-    state = GAME_STARTED
-
-def compute_rotated_rects(rects, w, h, rotation, target_x, target_y):
-    new_rects = []
-    for r in rects:
-        cx = r.x + r.w / 2 - w / 2
-        cy = r.y + r.h / 2 - h / 2
-        angle = math.radians(rotation)
-        rx = cx * math.cos(angle) - cy * math.sin(angle)
-        ry = cx * math.sin(angle) + cy * math.cos(angle)
-        final_x = int(rx + w / 2 + target_x - r.w / 2)
-        final_y = int(ry + h / 2 + target_y - r.h / 2)
-        new_rects.append(pygame.Rect(final_x, final_y, r.w, r.h))
-    return new_rects
-
-# Drawing player area with rotation
-def draw_player_area(name, position):
-    card_w, card_h = 60, 90
-    spacing = 15
-    area_w = card_w * 4 + spacing * 3
-    area_h = card_h + 40
-
-    player_surface = pygame.Surface((area_w, area_h), pygame.SRCALPHA)
-    player_surface.fill((0, 0, 0, 0))
-
-    slot_rects = []
-    for i in range(4):
-        x = i * (card_w + spacing)
-        y = 10
-        rect = pygame.Rect(x, y, card_w, card_h)
-        pygame.draw.rect(player_surface, GRAY, rect)
-        pygame.draw.rect(player_surface, BLACK, rect, 2)
-        slot_rects.append(rect)
-
-    name_text = FONT.render(name, True, WHITE)
-    player_surface.blit(name_text, ((area_w - name_text.get_width()) // 2, card_h + 15))
-
-    if position == 0:
-        screen.blit(player_surface, (WIDTH // 2 - area_w // 2, HEIGHT - area_h))
-        base_x = WIDTH // 2 - area_w // 2
-        base_y = HEIGHT - area_h
-        return [pygame.Rect(base_x + r.x, base_y + r.y, r.w, r.h) for r in slot_rects]
-    elif position == 1:
-        rotated = pygame.transform.rotate(player_surface, 270)
-        screen.blit(rotated, (0, HEIGHT // 2 - rotated.get_height() // 2))
-        return compute_rotated_rects(slot_rects, area_w, area_h, rotation=270, target_x=0, target_y=HEIGHT // 2 - rotated.get_height() // 2)
-    elif position == 2:
-        rotated = pygame.transform.rotate(player_surface, 180)
-        screen.blit(rotated, (WIDTH // 2 - rotated.get_width() // 2, 0))
-        return compute_rotated_rects(slot_rects, area_w, area_h, rotation=180, target_x=WIDTH // 2 - rotated.get_width() // 2, target_y=0)
-    elif position == 3:
-        rotated = pygame.transform.rotate(player_surface, 90)
-        screen.blit(rotated, (WIDTH - rotated.get_width(), HEIGHT // 2 - rotated.get_height() // 2))
-        return compute_rotated_rects(slot_rects, area_w, area_h, rotation=90, target_x=WIDTH - rotated.get_width(), target_y=HEIGHT // 2 - rotated.get_height() // 2)
-
-
-# Screen drawing
-def draw_menu():
-    screen.fill(WHITE)
-    title = FONT.render("Main Menu", True, BLACK)
-    screen.blit(title, (WIDTH // 2 - title.get_width() // 2, 50))
-    play_button.draw(screen)
-    quit_button.draw(screen)
-
-def draw_player_select():
-    screen.fill(WHITE)
-    title = FONT.render("Select Number of Players", True, BLACK)
-    screen.blit(title, (WIDTH // 2 - title.get_width() // 2, 50))
-    for btn in player_buttons:
-        btn.draw(screen)
-    back_button_select.draw(screen)
-
-def draw_name_entry():
-    screen.fill(WHITE)
-    title = FONT.render("Enter Player Names", True, BLACK)
-    screen.blit(title, (WIDTH // 2 - title.get_width() // 2, 50))
-    for box in name_inputs:
-        box.draw(screen)
-    back_button_names.draw(screen)
-    if all(box.text.strip() for box in name_inputs):
-        confirm = FONT.render("(Press Enter to continue)", True, GRAY)
-        screen.blit(confirm, (WIDTH // 2 - confirm.get_width() // 2, 500))
-
-def draw_game():
-    screen.fill(GREEN)
-    positions = PLAYER_POSITIONS.get(num_players, [0])
-    for i, pos in enumerate(positions):
-        draw_player_area(player_names[i], pos)
-
-# Buttons
-play_button = Button("Play", WIDTH // 2 - 75, 250, 150, 50, start_game)
-quit_button = Button("Quit", WIDTH // 2 - 75, 320, 150, 50, quit_game)
-player_buttons = [
-    Button("2 Players", 325, 175, 150, 50, lambda: choose_players(2)),
-    Button("3 Players", 325, 250, 150, 50, lambda: choose_players(3)),
-    Button("4 Players", 325, 325, 150, 50, lambda: choose_players(4)),
+# --- Test Players ---
+players = [
+    Player("Bottom", [0, 6, 0, 0]),
+    Player("Top",    [4, 3, 0, 0]),
+    Player("Left",   [2, 5, 0, 0]),
+    Player("Right",  [7, 4, 0, 0]),
 ]
-back_button_select = Button("Back", 50, 50, 100, 40, back_to_menu)
-back_button_names = Button("Back", 50, 50, 100, 40, back_to_select_players)
 
-# Main loop
-running = True
-while running:
-    screen.fill(WHITE)
+# --- Global Card Buttons ---
+card_buttons = []
 
-    for event in pygame.event.get():
-        if event.type == pygame.QUIT:
-            running = False
-        elif state == MENU:
-            play_button.handle_event(event)
-            quit_button.handle_event(event)
-        elif state == SELECT_PLAYERS:
-            for btn in player_buttons:
-                btn.handle_event(event)
-            back_button_select.handle_event(event)
-        elif state == ENTER_NAMES:
-            for box in name_inputs:
-                box.handle_event(event)
-            back_button_names.handle_event(event)
-            if event.type == pygame.KEYDOWN and event.key == pygame.K_RETURN:
-                if all(box.text.strip() for box in name_inputs):
-                    launch_game()
+center_buttons = []
 
-    if state == MENU:
-        draw_menu()
-    elif state == SELECT_PLAYERS:
-        draw_player_select()
-    elif state == ENTER_NAMES:
-        draw_name_entry()
-    elif state == GAME_STARTED:
-        draw_game()
 
-    pygame.display.flip()
-    clock.tick(60)
+# --- Drawing Functions ---
+def draw_card(x, y, text, rotation, player, card_index):
+    # Create a transparent card surface
+    card_surf = pygame.Surface((CARD_WIDTH, CARD_HEIGHT), pygame.SRCALPHA)
+    card_surf.fill(CARD_COLOR)
+    pygame.draw.rect(card_surf, TEXT_COLOR, card_surf.get_rect(), 2)
 
-pygame.quit()
-sys.exit()
+    # Render text onto the card surface
+    if text:
+        label = font.render(text, True, TEXT_COLOR)
+        label_rect = label.get_rect(center=(CARD_WIDTH // 2, CARD_HEIGHT // 2))
+        card_surf.blit(label, label_rect)
+
+    # Rotate entire surface (card + text)
+    rotated_surf = pygame.transform.rotate(card_surf, rotation)
+    rect = rotated_surf.get_rect(center=(x, y))
+
+    # Draw to main screen
+    screen.blit(rotated_surf, rect.topleft)
+
+    # Store clickable area
+    card_buttons.append((rect, player, card_index))
+
+
+def draw_table_with_states(players, show_states):
+    screen.fill(BG_COLOR)
+    card_buttons.clear()
+
+    def get_card_text(player_index, card_index):
+        if show_states and card_index < 2:
+            return str(players[player_index].hand[card_index].state)
+        return ""
+
+    # Player 1
+    for i in range(4):
+        x = WIDTH // 2 - 1.5 * (CARD_WIDTH + CARD_SPACING) + i * (CARD_WIDTH + CARD_SPACING)
+        y = HEIGHT - CARD_HEIGHT - 40
+        draw_card(x, y, get_card_text(0, i), 0, 0, i)
+
+    # Player 3
+    for i in range(4):
+        x = WIDTH // 2 + 1.5 * (CARD_WIDTH + CARD_SPACING) - i * (CARD_WIDTH + CARD_SPACING)
+        y = 40 + CARD_HEIGHT // 2
+        draw_card(x, y, get_card_text(1, i), 180, 2, i)
+
+    # Player 2
+    for i in range(4):
+        x = 40 + CARD_HEIGHT // 2
+        y = HEIGHT // 2 - 1.5 * (CARD_WIDTH + CARD_SPACING) + i * (CARD_WIDTH + CARD_SPACING)
+        draw_card(x, y, get_card_text(2, i), 90, 1, i)
+
+    # Right (index 3) - reversed
+    for i in range(4):
+        x = WIDTH - 40 - CARD_HEIGHT // 2
+        y = HEIGHT // 2 + 1.5 * (CARD_WIDTH + CARD_SPACING) - i * (CARD_WIDTH + CARD_SPACING)
+        draw_card(x, y, get_card_text(3, i), 270, 3, i)
+
+def draw_center_elements():
+    center_buttons.clear()
+
+    center_x, center_y = WIDTH // 2, HEIGHT // 2
+
+    # Dutch button
+    dutch_rect = pygame.Rect(center_x - 160, center_y - 25, 100, 50)
+    pygame.draw.rect(screen, (255, 125, 25), dutch_rect)
+    dutch_text = font.render("Dutch", True, TEXT_COLOR)
+    screen.blit(dutch_text, dutch_text.get_rect(center=dutch_rect.center))
+    center_buttons.append((dutch_rect, "Dutch"))
+
+    # Deck
+    deck_rect = pygame.Rect(center_x - CARD_WIDTH // 2, center_y - CARD_HEIGHT // 2, CARD_WIDTH, CARD_HEIGHT)
+    pygame.draw.rect(screen, (180, 180, 180), deck_rect)
+    deck_text = font.render("Deck", True, TEXT_COLOR)
+    screen.blit(deck_text, deck_text.get_rect(center=deck_rect.center))
+    center_buttons.append((deck_rect, "deck"))
+
+    # Cards (no text on these two)
+    card1_rect = pygame.Rect(center_x + 70, center_y - CARD_HEIGHT // 2, CARD_WIDTH, CARD_HEIGHT)
+    pygame.draw.rect(screen, BG_CARD_COLOR, card1_rect)
+    center_buttons.append((card1_rect, "card 1"))
+
+    card2_rect = pygame.Rect(center_x + 140, center_y - CARD_HEIGHT // 2, CARD_WIDTH, CARD_HEIGHT)
+    pygame.draw.rect(screen, BG_CARD_COLOR, card2_rect)
+    center_buttons.append((card2_rect, "card 2"))
+
+
+
+# --- Main Game Loop ---
+def main():
+    show_states = True  # Show states at start
+
+    while True:
+        draw_table_with_states(players, show_states)
+        if not show_states:
+            draw_center_elements()
+
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
+
+            elif event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_RETURN:
+                    show_states = False  # Hide states after ENTER
+
+            elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                if not show_states:  # ✅ Only active after ENTER
+                    mx, my = pygame.mouse.get_pos()
+
+                    # Check player cards
+                    for rect, player, card_index in card_buttons:
+                        if rect.collidepoint((mx, my)):
+                            print([player, card_index])
+
+                    # Check center elements
+                    for rect, label in center_buttons:
+                        if rect.collidepoint((mx, my)):
+                            print(label)
+
+        pygame.display.flip()
+        clock.tick(60)
+
+# --- Entry Point ---
+if __name__ == "__main__":
+    main()

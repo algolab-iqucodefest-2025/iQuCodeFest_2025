@@ -128,16 +128,64 @@ def draw_center_elements():
     pygame.draw.rect(screen, BG_CARD_COLOR, card2_rect)
     center_buttons.append((card2_rect, "card 2"))
 
+def draw_player_labels(show_states, current_player_no):
+    label_font = pygame.font.SysFont(None, 28)
 
+    player_positions = {
+        0: (WIDTH // 2, HEIGHT - 50),              # Bottom
+        1: (175, HEIGHT // 2 - 25),                      # Left
+        2: (WIDTH // 2, 20),                       # Top
+        3: (WIDTH - 125, HEIGHT // 2 - 25),              # Right
+    }
+
+    for i in range(4):
+        if show_states or i == current_player_no:
+            label = label_font.render(f"Player {i + 1}", True, (255, 255, 255))
+            pos = player_positions[i]
+
+            # Center horizontally or vertically based on side
+            if i == 0 or i == 2:  # Bottom or top
+                label_rect = label.get_rect(center=pos)
+            else:  # Left or right
+                label_rect = label.get_rect(center=pos)
+                label = pygame.transform.rotate(label, 270/i)
+
+            screen.blit(label, label_rect)
+
+def draw_start_message():
+    msg_font = pygame.font.SysFont(None, 36)
+    message = "Press Enter to Start"
+    text = msg_font.render(message, True, (255, 255, 255))
+    rect = text.get_rect(center=(WIDTH // 2, HEIGHT // 2))
+    screen.blit(text, rect)
 
 # --- Main Game Loop ---
 def main():
-    show_states = True  # Show states at start
+    turn_no = 0
+    player_no = 0
+    show_states = True              # Only True at game start
+    showed_initial_states = False  # Track if states were shown once
+    dutch_call = False
+    player_dutch = None
+    dutch_turn = None
+    drew_from_deck = False
+    selected_card = None
+    can_click_player_cards = False
+    player_done = False
 
     while True:
+        # End condition if Dutch was called on a previous turn
+        if dutch_turn is not None and turn_no == dutch_turn + 1 and player_no == player_dutch:
+            print("The game has ended.")
+            break
+
         draw_table_with_states(players, show_states)
         if not show_states:
             draw_center_elements()
+        else:
+            draw_start_message()  # Show message only when states are shown
+
+        draw_player_labels(show_states, player_no)
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -145,25 +193,67 @@ def main():
                 sys.exit()
 
             elif event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_RETURN:
-                    show_states = False  # Hide states after ENTER
+                if event.key == pygame.K_RETURN and not showed_initial_states:
+                    show_states = False
+                    showed_initial_states = True  # Only allow this once
 
             elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-                if not show_states:  # ✅ Only active after ENTER
+                if not show_states:
                     mx, my = pygame.mouse.get_pos()
 
-                    # Check player cards
-                    for rect, player, card_index in card_buttons:
-                        if rect.collidepoint((mx, my)):
-                            print([player, card_index])
-
-                    # Check center elements
+                    # Center buttons
                     for rect, label in center_buttons:
                         if rect.collidepoint((mx, my)):
-                            print(label)
+
+                            # Dutch button only if no one has called it yet
+                            if not drew_from_deck and not dutch_call:
+                                if label == "Dutch":
+                                    print("Dutch button clicked")
+                                    dutch_call = True
+                                    player_dutch = player_no
+                                    dutch_turn = turn_no
+                                    player_done = True
+                                    break  # End this player's turn
+
+                            # Allow deck click if Dutch was not chosen
+                            if not drew_from_deck and label == "deck":
+                                print("Deck clicked")
+                                drew_from_deck = True
+
+                            # Then choose card 1 or 2
+                            elif drew_from_deck and not selected_card:
+                                if label == "card 1":
+                                    print("Card 1 clicked")
+                                    selected_card = "card 1"
+                                    can_click_player_cards = True
+                                elif label == "card 2":
+                                    print("Card 2 clicked")
+                                    selected_card = "card 2"
+                                    can_click_player_cards = True
+
+                    # Player card interaction
+                    if can_click_player_cards:
+                        for rect, player, card_index in card_buttons:
+                            if rect.collidepoint((mx, my)):
+                                print([player, card_index])
+                                player_done = True
+                                break
+
+        # Turn ends
+        if player_done:
+            player_no = (player_no + 1) % 4
+            if player_no == 0:
+                turn_no += 1
+
+            # Reset per-turn state
+            drew_from_deck = False
+            selected_card = None
+            can_click_player_cards = False
+            player_done = False
 
         pygame.display.flip()
         clock.tick(60)
+
 
 # --- Entry Point ---
 if __name__ == "__main__":
